@@ -1,0 +1,4 @@
+.env
+*.log
+migration_results.json
+debug_row_*.html
