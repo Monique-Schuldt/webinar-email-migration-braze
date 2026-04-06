@@ -2,3 +2,6 @@
 *.log
 migration_results.json
 debug_row_*.html
+.env.rtf
+.env.txt
+*.csv
