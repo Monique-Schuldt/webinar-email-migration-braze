@@ -309,9 +309,48 @@ def assert_images_intact(original_html: str, processed_html: str, row_id: int) -
 
 def enforce_content_blocks(html: str, row_id: int) -> str:
     """
-    Python-side guarantee that Braze content block tags are present.
-    Runs after the Gemini agent in case it hardcoded footer HTML instead of using tags.
+    Python-side guarantee that Braze content block tags are present and have correct IDs.
+    Runs after the Gemini agent in case it hardcoded footer HTML or used wrong IDs.
     """
+    import re
+
+    # Fix Liquid variable format — ensure all webinar custom attributes use
+    # {{custom_attribute.${...}}} format. Gemini sometimes reverts to {{${...}}}.
+    custom_attr_vars = [
+        "webinar_time", "webinar_live_link", "webinar_link",
+        "webinar_replay_link", "webinar_replay",
+        "webinar_date_weekday", "webinar_date_day", "webinar_date_month_name",
+        "google_calendar_url", "icalendar_url", "outlookonline_url",
+    ]
+    for var in custom_attr_vars:
+        # Match {{${var}}} or {{ ${var} }} (without custom_attribute prefix) and fix it
+        wrong_pattern = r'\{\{\s*\$\{' + re.escape(var) + r'\}\s*\}\}'
+        correct = '{{custom_attribute.${' + var + '}}}'
+        html, count = re.subn(wrong_pattern, correct, html)
+        if count:
+            logger.debug("[row %d] Fixed Liquid format for %s", row_id, var)
+
+    # Fix any wrong IDs on content block tags — Gemini sometimes reassigns them sequentially.
+    # The correct IDs are fixed and must always be:
+    #   view_in_browser-en       → cb7
+    #   header_mindvalley_logo   → cb3
+    #   footer_left_side         → cb5
+    #   footer_right_side_pref_center → cb6
+    corrections = {
+        r"content_blocks\.\$\{view_in_browser-en\}\s*\|\s*id:\s*'[^']*'":
+            "content_blocks.${view_in_browser-en} | id: 'cb7'",
+        r"content_blocks\.\$\{header_mindvalley_logo\}\s*\|\s*id:\s*'[^']*'":
+            "content_blocks.${header_mindvalley_logo} | id: 'cb3'",
+        r"content_blocks\.\$\{footer_left_side\}\s*\|\s*id:\s*'[^']*'":
+            "content_blocks.${footer_left_side} | id: 'cb5'",
+        r"content_blocks\.\$\{footer_right_side_pref_center\}\s*\|\s*id:\s*'[^']*'":
+            "content_blocks.${footer_right_side_pref_center} | id: 'cb6'",
+    }
+    for pattern, replacement in corrections.items():
+        html, count = re.subn(pattern, replacement, html)
+        if count:
+            logger.debug("[row %d] Corrected content block ID: %s", row_id, replacement)
+
     footer_left  = "{{content_blocks.${footer_left_side} | id: 'cb5'}}"
     footer_right = "{{content_blocks.${footer_right_side_pref_center} | id: 'cb6'}}"
 
