@@ -204,18 +204,18 @@ Replace all legacy variable formats with canonical Braze custom attribute format
 | Legacy variable | Braze variable |
 |---|---|
 | `{{ user_name }}` | `{{${first_name} \| default: 'there'}}` |
-| `{{ webinar_time }}` | `{{${webinar_time}}}` |
-| `{{ webinar_live_link }}` | `{{${webinar_live_link}}}` |
-| `{{ webinar_link }}` | `{{${webinar_link}}}` |
-| `{{ webinar_replay_link }}` | `{{${webinar_replay_link}}}` |
-| `{{ webinar_replay }}` | `{{${webinar_replay}}}` |
+| `{{ webinar_time }}` | `{{custom_attribute.${webinar_time}}}` |
+| `{{ webinar_live_link }}` | `{{custom_attribute.${webinar_live_link}}}` |
+| `{{ webinar_link }}` | `{{custom_attribute.${webinar_link}}}` |
+| `{{ webinar_replay_link }}` | `{{custom_attribute.${webinar_replay_link}}}` |
+| `{{ webinar_replay }}` | `{{custom_attribute.${webinar_replay}}}` |
 | `{{ unsubscribe_link }}` | Remove — handled by `{{content_blocks.${footer_left_side}}}` |
-| `{{ webinar_date_weekday }}` | `{{${webinar_date_weekday}}}` |
-| `{{ webinar_date_day }}` | `{{${webinar_date_day}}}` |
-| `{{ webinar_date_month_name }}` | `{{${webinar_date_month_name}}}` |
-| `{{ google_calendar_url }}` | `{{${google_calendar_url}}}` |
-| `{{ icalendar_url }}` | `{{${icalendar_url}}}` |
-| `{{ outlookonline_url }}` | `{{${outlookonline_url}}}` |
+| `{{ webinar_date_weekday }}` | `{{custom_attribute.${webinar_date_weekday}}}` |
+| `{{ webinar_date_day }}` | `{{custom_attribute.${webinar_date_day}}}` |
+| `{{ webinar_date_month_name }}` | `{{custom_attribute.${webinar_date_month_name}}}` |
+| `{{ google_calendar_url }}` | `{{custom_attribute.${google_calendar_url}}}` |
+| `{{ icalendar_url }}` | `{{custom_attribute.${icalendar_url}}}` |
+| `{{ outlookonline_url }}` | `{{custom_attribute.${outlookonline_url}}}` |
 | `viewInBrowserUrl` (any form) | Remove — handled by `{{content_blocks.${view_in_browser-en}}}` |
 
 ---
