@@ -204,18 +204,18 @@ Replace all legacy variable formats with canonical Braze custom attribute format
 | Legacy variable | Braze variable |
 |---|---|
 | `{{ user_name }}` | `{{${first_name} \| default: 'there'}}` |
-| `{{ webinar_time }}` | `{{custom_attribute.${webinar_time}}}` |
-| `{{ webinar_live_link }}` | `{{custom_attribute.${webinar_live_link}}}` |
-| `{{ webinar_link }}` | `{{custom_attribute.${webinar_link}}}` |
-| `{{ webinar_replay_link }}` | `{{custom_attribute.${webinar_replay_link}}}` |
-| `{{ webinar_replay }}` | `{{custom_attribute.${webinar_replay}}}` |
+| `{{ webinar_time }}` | `{{context.${webinar_time}}}` |
+| `{{ webinar_live_link }}` | `{{context.${webinar_live_link}}}` |
+| `{{ webinar_link }}` | `{{context.${webinar_link}}}` |
+| `{{ webinar_replay_link }}` | `{{context.${webinar_replay_link}}}` |
+| `{{ webinar_replay }}` | `{{context.${webinar_replay}}}` |
 | `{{ unsubscribe_link }}` | Remove — handled by `{{content_blocks.${footer_left_side}}}` |
-| `{{ webinar_date_weekday }}` | `{{custom_attribute.${webinar_date_weekday}}}` |
-| `{{ webinar_date_day }}` | `{{custom_attribute.${webinar_date_day}}}` |
-| `{{ webinar_date_month_name }}` | `{{custom_attribute.${webinar_date_month_name}}}` |
-| `{{ google_calendar_url }}` | `{{custom_attribute.${google_calendar_url}}}` |
-| `{{ icalendar_url }}` | `{{custom_attribute.${icalendar_url}}}` |
-| `{{ outlookonline_url }}` | `{{custom_attribute.${outlookonline_url}}}` |
+| `{{ webinar_date_weekday }}` | `{{context.${webinar_date_weekday}}}` |
+| `{{ webinar_date_day }}` | `{{context.${webinar_date_day}}}` |
+| `{{ webinar_date_month_name }}` | `{{context.${webinar_date_month_name}}}` |
+| `{{ google_calendar_url }}` | `{{context.${google_calendar_url}}}` |
+| `{{ icalendar_url }}` | `{{context.${icalendar_url}}}` |
+| `{{ outlookonline_url }}` | `{{context.${outlookonline_url}}}` |
 | `viewInBrowserUrl` (any form) | Remove — handled by `{{content_blocks.${view_in_browser-en}}}` |
 
 ---
@@ -307,6 +307,53 @@ def assert_images_intact(original_html: str, processed_html: str, row_id: int) -
         )
 
 
+def clean_body_content(body_html: str, row_id: int) -> str:
+    """
+    Clean the raw body content BEFORE it is wrapped in the scaffold.
+    Removes duplicate scaffold elements Gemini sometimes injects.
+    """
+    # Remove hidden preheader divs
+    body_html = re.sub(
+        r'<div[^>]*display:\s*none[^>]*>.*?</div>',
+        '', body_html, flags=re.DOTALL | re.IGNORECASE
+    )
+    # Remove view-in-browser content block tags
+    body_html = re.sub(
+        r'(?:<p[^>]*>)?\s*\{\{content_blocks\.\$\{view_in_browser[^}]+\}[^}]*\}\}\s*(?:</p>)?',
+        '', body_html, flags=re.IGNORECASE
+    )
+    # Remove logo content block tags
+    body_html = re.sub(
+        r'(?:<p[^>]*>)?\s*\{\{content_blocks\.\$\{header_mindvalley_logo[^}]*\}[^}]*\}\}\s*(?:</p>)?',
+        '', body_html, flags=re.IGNORECASE
+    )
+    # Remove reason-for-receiving statements
+    body_html = re.sub(
+        r'<[^>]+>[^<]*You are receiving this email because[^<]*</[^>]+>',
+        '', body_html, flags=re.IGNORECASE
+    )
+    # Remove duplicate footer blocks
+    body_html = re.sub(
+        r'<table[^>]*>(?:(?!<table).)*footer_left_side.*?footer_right_side.*?</table>',
+        '', body_html, flags=re.DOTALL | re.IGNORECASE
+    )
+    # Remove inner wrapper tables with extra padding-left:60px
+    def strip_padding_wrapper(h):
+        pattern = re.compile(
+            r'<table[^>]*>\s*<tr>\s*<td[^>]*padding-left:\s*60px[^>]*>(.*?)</td>\s*</tr>\s*</table>',
+            re.DOTALL | re.IGNORECASE
+        )
+        prev = None
+        while prev != h:
+            prev = h
+            h = pattern.sub(lambda m: m.group(1).strip(), h)
+        return h
+    body_html = strip_padding_wrapper(body_html)
+
+    logger.debug("[row %d] Body content cleaned", row_id)
+    return body_html
+
+
 def enforce_content_blocks(html: str, row_id: int) -> str:
     """
     Python-side guarantee that Braze content block tags are present and have correct IDs.
@@ -314,21 +361,52 @@ def enforce_content_blocks(html: str, row_id: int) -> str:
     """
     import re
 
-    # Fix Liquid variable format — ensure all webinar custom attributes use
-    # {{custom_attribute.${...}}} format. Gemini sometimes reverts to {{${...}}}.
-    custom_attr_vars = [
+    # Remove {% %} ESP/legacy Liquid tags that are not valid in Braze email templates
+    # These sometimes appear when Gemini carries over tracking code from the original HTML
+    html = re.sub(r'\{%[^%]*%\}', '', html, flags=re.DOTALL)
+
+    # Ensure all <p> tags have Mindvalley standard inline font styles.
+    # Gemini sometimes returns bare <p> tags without font-family/font-size,
+    # causing email clients to fall back to their default font.
+    def ensure_p_styles(h):
+        def add_font(m):
+            tag = m.group(0)
+            # Skip if already has font-family defined
+            if 'font-family' in tag.lower():
+                return tag
+            # Skip Braze content block wrappers
+            if 'content_blocks' in tag:
+                return tag
+            # Insert standard font styles into the style attribute
+            if 'style="' in tag:
+                return tag.replace('style="', 'style="font-family:Verdana,Arial,Sans-serif;font-size:16px;line-height:1.5;mso-line-height-alt:24px;color:#0F131A;', 1)
+            else:
+                return tag.replace('<p ', '<p style="font-family:Verdana,Arial,Sans-serif;font-size:16px;line-height:1.5;mso-line-height-alt:24px;color:#0F131A;" ', 1)
+        return re.sub(r'<p(?:\s[^>]*)?', add_font, h)
+
+    html = ensure_p_styles(html)
+
+    # Fix Liquid variable format — ensure all webinar context variables use
+    # {{context.${...}}} format. Gemini sometimes reverts to {{${...}}} or
+    # uses the old {{custom_attribute.${...}}} format.
+    context_vars = [
         "webinar_time", "webinar_live_link", "webinar_link",
         "webinar_replay_link", "webinar_replay",
         "webinar_date_weekday", "webinar_date_day", "webinar_date_month_name",
         "google_calendar_url", "icalendar_url", "outlookonline_url",
     ]
-    for var in custom_attr_vars:
-        # Match {{${var}}} or {{ ${var} }} (without custom_attribute prefix) and fix it
+    for var in context_vars:
+        # Fix bare {{${var}}} (missing prefix entirely)
         wrong_pattern = r'\{\{\s*\$\{' + re.escape(var) + r'\}\s*\}\}'
-        correct = '{{custom_attribute.${' + var + '}}}'
+        correct = '{{context.${' + var + '}}}'
         html, count = re.subn(wrong_pattern, correct, html)
         if count:
-            logger.debug("[row %d] Fixed Liquid format for %s", row_id, var)
+            logger.debug("[row %d] Fixed bare Liquid format for %s", row_id, var)
+        # Fix old {{custom_attribute.${var}}} → {{context.${var}}}
+        old_pattern = r'\{\{custom_attribute\.\$\{' + re.escape(var) + r'\}\}\}'
+        html, count = re.subn(old_pattern, correct, html)
+        if count:
+            logger.debug("[row %d] Migrated custom_attribute → context for %s", row_id, var)
 
     # Fix any wrong IDs on content block tags — Gemini sometimes reassigns them sequentially.
     # The correct IDs are fixed and must always be:
@@ -603,16 +681,32 @@ def run_html_agent(html: str, filename: str, row_id: int) -> tuple[str, dict]:
         contents=payload,
         config=genai.types.GenerateContentConfig(
             system_instruction=AGENT_SYSTEM_PROMPT,
-            max_output_tokens=16000,
+            max_output_tokens=65536,  # Increased for large emails
         ),
     )
     raw = response.text.strip()
 
+    # Strip markdown fences Gemini sometimes adds
+    raw = re.sub(r"^```html\s*", "", raw, flags=re.MULTILINE)
+    raw = re.sub(r"^```\s*", "", raw, flags=re.MULTILINE)
+    raw = re.sub(r"\s*```$", "", raw)
+
     # Parse response sections
     if "===BODY===" not in raw:
-        raise RuntimeError(
-            f"[row {row_id}] Agent response missing ===BODY=== delimiter. Raw: {raw[:300]}"
-        )
+        # Fallback: Gemini returned full HTML instead of using the delimiter.
+        # Extract the body content from between <body> tags if present,
+        # otherwise use the raw content as-is and let post-processing clean it up.
+        logger.warning("[row %d] No ===BODY=== delimiter — falling back to full HTML extraction", row_id)
+        if "<body" in raw.lower():
+            body_match = re.search(r'<body[^>]*>(.*?)</body>', raw, re.DOTALL | re.IGNORECASE)
+            body_html = body_match.group(1).strip() if body_match else raw
+        else:
+            body_html = raw
+        preheader = ""
+        audit: dict = {}
+        body_html = clean_body_content(body_html, row_id)
+        final_html = wrap_in_production_scaffold(body_html, preheader)
+        return final_html, audit
 
     # Extract body content
     after_body = raw.split("===BODY===", 1)[1]
@@ -637,6 +731,9 @@ def run_html_agent(html: str, filename: str, row_id: int) -> tuple[str, dict]:
 
     if not body_html:
         raise RuntimeError(f"[row {row_id}] Agent returned empty body content")
+
+    # Clean body content before wrapping in scaffold
+    body_html = clean_body_content(body_html, row_id)
 
     # Wrap body in production scaffold
     final_html = wrap_in_production_scaffold(body_html, preheader)

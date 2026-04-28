@@ -31,8 +31,8 @@ The script is idempotent — safe to re-run. If a template already exists it wil
 
 **1. Clone the repo**
 ```bash
-git clone https://github.com/Monique-Schuldt/webinar-email-migration-braze
-cd webinar-email-migration-braze
+git clone https://github.com/mindvalley-ai/webinar-email-migration-pipeline
+cd webinar-email-migration-pipeline
 ```
 
 **2. Install dependencies**
@@ -113,17 +113,17 @@ Legacy dynamic parameters are automatically converted to Braze Liquid syntax:
 | Legacy | Braze |
 |---|---|
 | `{{ user_name }}` | `{{${first_name}}}` |
-| `{{ webinar_time }}` | `{{${webinar_time}}}` |
-| `{{ webinar_live_link }}` | `{{${webinar_live_link}}}` |
-| `{{ webinar_link }}` | `{{${webinar_link}}}` |
-| `{{ webinar_replay_link }}` | `{{${webinar_replay_link}}}` |
-| `{{ webinar_replay }}` | `{{${webinar_replay}}}` |
-| `{{ webinar_date_weekday }}` | `{{${webinar_date_weekday}}}` |
-| `{{ webinar_date_day }}` | `{{${webinar_date_day}}}` |
-| `{{ webinar_date_month_name }}` | `{{${webinar_date_month_name}}}` |
-| `{{ google_calendar_url }}` | `{{${google_calendar_url}}}` |
-| `{{ icalendar_url }}` | `{{${icalendar_url}}}` |
-| `{{ outlookonline_url }}` | `{{${outlookonline_url}}}` |
+| `{{ webinar_time }}` | `{{context.${webinar_time}}}` |
+| `{{ webinar_live_link }}` | `{{context.${webinar_live_link}}}` |
+| `{{ webinar_link }}` | `{{context.${webinar_link}}}` |
+| `{{ webinar_replay_link }}` | `{{context.${webinar_replay_link}}}` |
+| `{{ webinar_replay }}` | `{{context.${webinar_replay}}}` |
+| `{{ webinar_date_weekday }}` | `{{context.${webinar_date_weekday}}}` |
+| `{{ webinar_date_day }}` | `{{context.${webinar_date_day}}}` |
+| `{{ webinar_date_month_name }}` | `{{context.${webinar_date_month_name}}}` |
+| `{{ google_calendar_url }}` | `{{context.${google_calendar_url}}}` |
+| `{{ icalendar_url }}` | `{{context.${icalendar_url}}}` |
+| `{{ outlookonline_url }}` | `{{context.${outlookonline_url}}}` |
 | `{{ unsubscribe_link }}` | Removed — handled by Braze footer content block |
 | `viewInBrowserUrl` | Removed — handled by Braze view-in-browser content block |
 
