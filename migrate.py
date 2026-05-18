@@ -193,7 +193,7 @@ CRITICAL: These are mandatory replacements. You MUST insert the exact Braze cont
 - Remove the ENTIRE existing footer — every row containing unsubscribe links, physical address, social media icons, preference centre links, or legal text.
 - Replace with ONLY these two content block tags in a two-column row. Do NOT hardcode any footer HTML whatsoever:
   - Left column: `{{content_blocks.${footer_left_side} | id: 'cb5'}}`
-  - Right column: `{{content_blocks.${footer_right_side_pref_center} | id: 'cb6'}}`
+  - Right column: `{{content_blocks.${footer_right_side_masterclass} | id: 'cb6'}}`
 
 ---
 
@@ -204,18 +204,18 @@ Replace all legacy variable formats with canonical Braze custom attribute format
 | Legacy variable | Braze variable |
 |---|---|
 | `{{ user_name }}` | `{{${first_name} \| default: 'there'}}` |
-| `{{ webinar_time }}` | `{{context.${webinar_time}}}` |
-| `{{ webinar_live_link }}` | `{{context.${webinar_live_link}}}` |
-| `{{ webinar_link }}` | `{{context.${webinar_link}}}` |
-| `{{ webinar_replay_link }}` | `{{context.${webinar_replay_link}}}` |
-| `{{ webinar_replay }}` | `{{context.${webinar_replay}}}` |
+| `{{ webinar_time }}` | `{{custom_attribute.${webinar_time}}}` |
+| `{{ webinar_live_link }}` | `{{custom_attribute.${webinar_live_link}}}` |
+| `{{ webinar_link }}` | `{{custom_attribute.${webinar_link}}}` |
+| `{{ webinar_replay_link }}` | `{{custom_attribute.${webinar_replay_link}}}` |
+| `{{ webinar_replay }}` | `{{custom_attribute.${webinar_replay}}}` |
 | `{{ unsubscribe_link }}` | Remove — handled by `{{content_blocks.${footer_left_side}}}` |
-| `{{ webinar_date_weekday }}` | `{{context.${webinar_date_weekday}}}` |
-| `{{ webinar_date_day }}` | `{{context.${webinar_date_day}}}` |
-| `{{ webinar_date_month_name }}` | `{{context.${webinar_date_month_name}}}` |
-| `{{ google_calendar_url }}` | `{{context.${google_calendar_url}}}` |
-| `{{ icalendar_url }}` | `{{context.${icalendar_url}}}` |
-| `{{ outlookonline_url }}` | `{{context.${outlookonline_url}}}` |
+| `{{ webinar_date_weekday }}` | `{{custom_attribute.${webinar_date_weekday}}}` |
+| `{{ webinar_date_day }}` | `{{custom_attribute.${webinar_date_day}}}` |
+| `{{ webinar_date_month_name }}` | `{{custom_attribute.${webinar_date_month_name}}}` |
+| `{{ google_calendar_url }}` | `{{custom_attribute.${google_calendar_url}}}` |
+| `{{ icalendar_url }}` | `{{custom_attribute.${icalendar_url}}}` |
+| `{{ outlookonline_url }}` | `{{custom_attribute.${outlookonline_url}}}` |
 | `viewInBrowserUrl` (any form) | Remove — handled by `{{content_blocks.${view_in_browser-en}}}` |
 
 ---
@@ -226,6 +226,12 @@ Replace all legacy variable formats with canonical Braze custom attribute format
 - Audit href URLs for PII in query parameters — flag as "critical" if found.
 - Flag tracking pixels under "warnings".
 
+## LINK REPLACEMENT RULES
+
+- **Gmail Promotions tab notice**: Wherever the email contains a note about Gmail's Promotions tab (typically: "Note: We will also send you reminder emails, and if you are a Gmail user, our emails might land in the Promotions tab…"), the "Click here" hyperlink in that notice MUST use this URL:
+  `https://help.mindvalley.com/hc/en-us/articles/40061248343963-How-to-Stay-Updated-With-Mindvalley-Emails`
+  Replace any other URL on that link (e.g. `https://faqs.mindvalley.com/en/articles/4217741-how-to-not-miss-important-mindvalley-updates` or any variant) with the correct URL above. Do not alter the link text or surrounding copy.
+
 ## DELIVERABILITY RULES
 
 Flag violations as "critical". Do not alter content — flag for sender review.
@@ -234,7 +240,6 @@ Flag violations as "critical". Do not alter content — flag for sender review.
 
 - Do not alter editorial content, messaging, or email structure beyond what rules require.
 - Do not change image `src` URLs.
-- Do not change subject lines.
 - Do not reorder content sections.
 
 ---
@@ -365,6 +370,25 @@ def enforce_content_blocks(html: str, row_id: int) -> str:
     # These sometimes appear when Gemini carries over tracking code from the original HTML
     html = re.sub(r'\{%[^%]*%\}', '', html, flags=re.DOTALL)
 
+    # Replace legacy Gmail Promotions tab notice link with the canonical help centre URL.
+    # Covers the old faqs.mindvalley.com URL and any other URL that may appear on that anchor.
+    GMAIL_NOTICE_CORRECT_URL = (
+        "https://help.mindvalley.com/hc/en-us/articles/"
+        "40061248343963-How-to-Stay-Updated-With-Mindvalley-Emails"
+    )
+    html, count = re.subn(
+        r'(https://faqs\.mindvalley\.com/en/articles/4217741[^\s"\']*)',
+        GMAIL_NOTICE_CORRECT_URL,
+        html,
+    )
+    if count:
+        logger.debug("[row %d] Replaced %d legacy Gmail notice URL(s) with canonical help centre URL", row_id, count)
+
+    # Replace {{ user_name }} with {{${first_name}}} in HTML body
+    html, count = re.subn(r'\{\{\s*user_name\s*\}\}', '{{${first_name}}}', html)
+    if count:
+        logger.debug("[row %d] Replaced %d user_name → first_name in body", row_id, count)
+
     # Ensure all <p> tags have Mindvalley standard inline font styles.
     # Gemini sometimes returns bare <p> tags without font-family/font-size,
     # causing email clients to fall back to their default font.
@@ -386,34 +410,28 @@ def enforce_content_blocks(html: str, row_id: int) -> str:
 
     html = ensure_p_styles(html)
 
-    # Fix Liquid variable format — ensure all webinar context variables use
-    # {{context.${...}}} format. Gemini sometimes reverts to {{${...}}} or
-    # uses the old {{custom_attribute.${...}}} format.
-    context_vars = [
+    # Fix Liquid variable format — ensure all webinar custom attributes use
+    # {{custom_attribute.${...}}} format. Gemini sometimes reverts to {{${...}}}.
+    custom_attr_vars = [
         "webinar_time", "webinar_live_link", "webinar_link",
         "webinar_replay_link", "webinar_replay",
         "webinar_date_weekday", "webinar_date_day", "webinar_date_month_name",
         "google_calendar_url", "icalendar_url", "outlookonline_url",
     ]
-    for var in context_vars:
-        # Fix bare {{${var}}} (missing prefix entirely)
+    for var in custom_attr_vars:
+        # Match {{${var}}} or {{ ${var} }} (without custom_attribute prefix) and fix it
         wrong_pattern = r'\{\{\s*\$\{' + re.escape(var) + r'\}\s*\}\}'
-        correct = '{{context.${' + var + '}}}'
+        correct = '{{custom_attribute.${' + var + '}}}'
         html, count = re.subn(wrong_pattern, correct, html)
         if count:
-            logger.debug("[row %d] Fixed bare Liquid format for %s", row_id, var)
-        # Fix old {{custom_attribute.${var}}} → {{context.${var}}}
-        old_pattern = r'\{\{custom_attribute\.\$\{' + re.escape(var) + r'\}\}\}'
-        html, count = re.subn(old_pattern, correct, html)
-        if count:
-            logger.debug("[row %d] Migrated custom_attribute → context for %s", row_id, var)
+            logger.debug("[row %d] Fixed Liquid format for %s", row_id, var)
 
     # Fix any wrong IDs on content block tags — Gemini sometimes reassigns them sequentially.
     # The correct IDs are fixed and must always be:
     #   view_in_browser-en       → cb7
     #   header_mindvalley_logo   → cb3
     #   footer_left_side         → cb5
-    #   footer_right_side_pref_center → cb6
+    #   footer_right_side_masterclass → cb6
     corrections = {
         r"content_blocks\.\$\{view_in_browser-en\}\s*\|\s*id:\s*'[^']*'":
             "content_blocks.${view_in_browser-en} | id: 'cb7'",
@@ -421,8 +439,8 @@ def enforce_content_blocks(html: str, row_id: int) -> str:
             "content_blocks.${header_mindvalley_logo} | id: 'cb3'",
         r"content_blocks\.\$\{footer_left_side\}\s*\|\s*id:\s*'[^']*'":
             "content_blocks.${footer_left_side} | id: 'cb5'",
-        r"content_blocks\.\$\{footer_right_side_pref_center\}\s*\|\s*id:\s*'[^']*'":
-            "content_blocks.${footer_right_side_pref_center} | id: 'cb6'",
+        r"content_blocks\.\$\{footer_right_side_masterclass\}\s*\|\s*id:\s*'[^']*'":
+            "content_blocks.${footer_right_side_masterclass} | id: 'cb6'",
     }
     for pattern, replacement in corrections.items():
         html, count = re.subn(pattern, replacement, html)
@@ -430,7 +448,7 @@ def enforce_content_blocks(html: str, row_id: int) -> str:
             logger.debug("[row %d] Corrected content block ID: %s", row_id, replacement)
 
     footer_left  = "{{content_blocks.${footer_left_side} | id: 'cb5'}}"
-    footer_right = "{{content_blocks.${footer_right_side_pref_center} | id: 'cb6'}}"
+    footer_right = "{{content_blocks.${footer_right_side_masterclass} | id: 'cb6'}}"
 
     if footer_left not in html or footer_right not in html:
         logger.debug("[row %d] Footer content blocks missing — injecting", row_id)
@@ -451,7 +469,7 @@ def enforce_content_blocks(html: str, row_id: int) -> str:
                     <td class="column column-2" width="50%" style="mso-table-lspace:0;mso-table-rspace:0;font-weight:400;text-align:left;padding-bottom:24px;padding-top:24px;vertical-align:top;">
                         <table class="paragraph_block block-1" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="mso-table-lspace:0;mso-table-rspace:0;word-break:break-word;">
                             <tr><td class="pad"><div style="color:#0f131a;direction:ltr;font-family:Verdana,Arial,Sans-serif;font-size:16px;font-weight:400;letter-spacing:0;text-align:center;">
-                                <p style="margin:0">{{content_blocks.${footer_right_side_pref_center} | id: 'cb6'}}</p>
+                                <p style="margin:0">{{content_blocks.${footer_right_side_masterclass} | id: 'cb6'}}</p>
                             </div></td></tr>
                         </table>
                     </td>
@@ -621,7 +639,7 @@ def wrap_in_production_scaffold(body_html: str, preheader: str) -> str:
                             <td class="column column-2" width="50%" style="mso-table-lspace:0;mso-table-rspace:0;font-weight:400;text-align:left;padding-bottom:24px;padding-top:24px;vertical-align:top;">
                                 <table class="paragraph_block block-1" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="mso-table-lspace:0;mso-table-rspace:0;word-break:break-word;">
                                     <tr><td class="pad"><div style="color:#0f131a;direction:ltr;font-family:Verdana,Arial,Sans-serif;font-size:16px;font-weight:400;letter-spacing:0;text-align:center;">
-                                        <p style="margin:0;">{{{{content_blocks.${{footer_right_side_pref_center}} | id: 'cb6'}}}}</p>
+                                        <p style="margin:0;">{{{{content_blocks.${{footer_right_side_masterclass}} | id: 'cb6'}}}}</p>
                                     </div></td></tr>
                                 </table>
                             </td>
@@ -833,6 +851,8 @@ def process_row(
     webinar_id = int(row["webinar_id"])
     email_type = str(row["type"])
     subject    = str(row["subject"])
+    # Apply Liquid variable substitution to subject line
+    subject    = re.sub(r'\{\{\s*user_name\s*\}\}', '{{${first_name}}}', subject)
     html       = str(row["content"])
     tname      = template_name(webinar_id, email_type, subject)
     filename   = f"{tname}.html"
