@@ -113,17 +113,17 @@ Legacy dynamic parameters are automatically converted to Braze Liquid syntax:
 | Legacy | Braze |
 |---|---|
 | `{{ user_name }}` | `{{${first_name}}}` |
-| `{{ webinar_time }}` | `{{context.${webinar_time}}}` |
-| `{{ webinar_live_link }}` | `{{context.${webinar_live_link}}}` |
-| `{{ webinar_link }}` | `{{context.${webinar_link}}}` |
-| `{{ webinar_replay_link }}` | `{{context.${webinar_replay_link}}}` |
-| `{{ webinar_replay }}` | `{{context.${webinar_replay}}}` |
-| `{{ webinar_date_weekday }}` | `{{context.${webinar_date_weekday}}}` |
-| `{{ webinar_date_day }}` | `{{context.${webinar_date_day}}}` |
-| `{{ webinar_date_month_name }}` | `{{context.${webinar_date_month_name}}}` |
-| `{{ google_calendar_url }}` | `{{context.${google_calendar_url}}}` |
-| `{{ icalendar_url }}` | `{{context.${icalendar_url}}}` |
-| `{{ outlookonline_url }}` | `{{context.${outlookonline_url}}}` |
+| `{{ webinar_time }}` | `{{event_properties.${webinar_time}}}` |
+| `{{ webinar_live_link }}` | `{{event_properties.${webinar_live_link}}}` |
+| `{{ webinar_link }}` | `{{event_properties.${webinar_link}}}` |
+| `{{ webinar_replay_link }}` | `{{event_properties.${webinar_replay_link}}}` |
+| `{{ webinar_replay }}` | `{{event_properties.${webinar_replay}}}` |
+| `{{ webinar_date_weekday }}` | `{{event_properties.${webinar_date_weekday}}}` |
+| `{{ webinar_date_day }}` | `{{event_properties.${webinar_date_day}}}` |
+| `{{ webinar_date_month_name }}` | `{{event_properties.${webinar_date_month_name}}}` |
+| `{{ google_calendar_url }}` | `{{event_properties.${google_calendar_url}}}` |
+| `{{ icalendar_url }}` | `{{event_properties.${icalendar_url}}}` |
+| `{{ outlookonline_url }}` | `{{event_properties.${outlookonline_url}}}` |
 | `{{ unsubscribe_link }}` | Removed — handled by Braze footer content block |
 | `viewInBrowserUrl` | Removed — handled by Braze view-in-browser content block |
 
@@ -138,6 +138,6 @@ The following Braze content blocks are injected automatically into every templat
 | View in browser | `{{content_blocks.${view_in_browser-en} \| id: 'cb7'}}` |
 | Mindvalley logo | `{{content_blocks.${header_mindvalley_logo} \| id: 'cb3'}}` |
 | Footer left | `{{content_blocks.${footer_left_side} \| id: 'cb5'}}` |
-| Footer right | `{{content_blocks.${footer_right_side_pref_center} \| id: 'cb6'}}` |
+| Footer right | `{{content_blocks.${footer_right_side_masterclass} \| id: 'cb6'}}` |
 
 These must exist in your Braze instance before sending.
